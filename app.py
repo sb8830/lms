@@ -1,184 +1,164 @@
 import streamlit as st
-from urllib.parse import urlencode
+import pyrebase
+import json
+from google.cloud import firestore
 
-# --------- Simulated Storage ---------
-users = {}
-courses = [
-    {"title": "Basics of Stock Market", "level": "Beginner"},
-    {"title": "Technical Analysis", "level": "Intermediate"},
-    {"title": "Options Trading", "level": "Advanced"},
-]
+# Load Firebase config
+with open("firebase_config.json") as f:
+    firebase_config = json.load(f)
 
-# --------- Session State ---------
+# Initialize Firebase
+firebase = pyrebase.initialize_app(firebase_config)
+auth = firebase.auth()
+db = firestore.Client.from_service_account_info(firebase_config)
+
+# Set Streamlit page config
+st.set_page_config(page_title="FinEdu LMS", layout="wide")
+
+# Session state
 if "user" not in st.session_state:
     st.session_state.user = None
 if "role" not in st.session_state:
     st.session_state.role = None
-if "enrolled_courses" not in st.session_state:
-    st.session_state.enrolled_courses = []
 
-# --------- Public Website ---------
+# ----------------------------
+# Authentication functions
+# ----------------------------
+def login():
+    st.subheader("🔐 Login")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        try:
+            user = auth.sign_in_with_email_and_password(email, password)
+            st.session_state.user = email
+            if email == "admin@finedu.com":
+                st.session_state.role = "admin"
+            else:
+                st.session_state.role = "student"
+            st.success(f"Welcome, {email}!")
+        except:
+            st.error("Login failed. Check credentials.")
+
+def register():
+    st.subheader("📝 Register")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Register"):
+        try:
+            user = auth.create_user_with_email_and_password(email, password)
+            db.collection("users").document(email).set({"role": "student"})
+            st.success("Registered successfully! Please login.")
+        except:
+            st.error("Registration failed.")
+
+# ----------------------------
+# Public Website
+# ----------------------------
 def website_home():
-    st.title("📈 FinEdu - Master the Stock Market")
-    st.markdown("Welcome to **FinEdu**, your destination to become a stock market pro.")
-    st.markdown("""
-    - 🧠 Expert-led Courses  
-    - 🔔 Market Alerts (coming soon)  
-    - 📚 Free Resources  
-    - 👨‍🎓 Join 10,000+ learners!
-    """)
+    st.title("📈 Welcome to FinEdu")
+    st.markdown("Learn the stock market from experts.")
     st.image("https://images.unsplash.com/photo-1559526324-593bc073d938", use_column_width=True)
 
 def website_about():
-    st.subheader("About Us")
-    st.write("FinEdu is an edtech platform focused on financial literacy and market education.")
+    st.header("About Us")
+    st.write("We are a financial education platform focused on the Indian stock market.")
 
 def website_contact():
-    st.subheader("Contact")
+    st.header("Contact Us")
     st.write("📧 support@finedu.com")
     st.write("📍 Mumbai, India")
 
-# --------- LMS Portal ---------
-def lms_login():
-    st.subheader("🔐 LMS Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if username in users and users[username] == password:
-            st.session_state.user = username
-            st.session_state.role = "student"
-            st.success(f"Welcome, {username}!")
-        else:
-            st.error("Invalid credentials.")
-
-def lms_register():
-    st.subheader("📝 LMS Registration")
-    username = st.text_input("Create Username")
-    password = st.text_input("Create Password", type="password")
-    if st.button("Register"):
-        if username in users:
-            st.warning("User already exists.")
-        else:
-            users[username] = password
-            st.success("Registration successful! Please login.")
-
+# ----------------------------
+# LMS Portal
+# ----------------------------
 def lms_dashboard():
-    st.subheader(f"🎓 {st.session_state.user}'s Dashboard")
-    if st.session_state.enrolled_courses:
-        st.markdown("### Enrolled Courses:")
-        for course in st.session_state.enrolled_courses:
+    st.title("🎓 LMS Dashboard")
+    email = st.session_state.user
+    user_doc = db.collection("users").document(email).get()
+    enrolled = user_doc.to_dict().get("enrolled_courses", [])
+    if enrolled:
+        st.subheader("Your Courses:")
+        for course in enrolled:
             st.markdown(f"- {course}")
     else:
-        st.info("No enrolled courses yet.")
-        
+        st.info("You haven't enrolled in any courses.")
+
 def lms_catalog():
     st.subheader("📚 Course Catalog")
-    for course in courses:
+    courses = db.collection("courses").stream()
+    for c in courses:
+        course = c.to_dict()
         st.markdown(f"**{course['title']}** — *{course['level']}*")
         if st.button(f"Enroll in {course['title']}", key=course['title']):
-            if course['title'] not in st.session_state.enrolled_courses:
-                st.session_state.enrolled_courses.append(course['title'])
-                st.success(f"Enrolled in {course['title']}!")
+            user_ref = db.collection("users").document(st.session_state.user)
+            user_doc = user_ref.get().to_dict()
+            enrolled = user_doc.get("enrolled_courses", [])
+            if course['title'] not in enrolled:
+                enrolled.append(course['title'])
+                user_ref.update({"enrolled_courses": enrolled})
+                st.success(f"Enrolled in {course['title']}")
             else:
                 st.info("Already enrolled.")
 
-# --------- Admin Control Panel ---------
-def admin_login():
-    st.subheader("🔐 Admin Login")
-    username = st.text_input("Admin Username")
-    password = st.text_input("Admin Password", type="password")
-    if st.button("Login as Admin"):
-        if username == "admin" and password == "admin123":
-            st.session_state.user = "admin"
-            st.session_state.role = "admin"
-            st.success("Admin logged in.")
-        else:
-            st.error("Invalid admin credentials.")
-
+# ----------------------------
+# Admin Panel
+# ----------------------------
 def admin_dashboard():
-    st.subheader("🛠️ Admin Dashboard")
-    
-    st.markdown("### 🔗 Direct Access Links")
-    base_url = st.experimental_get_query_params()
-    full_url = st.experimental_get_url()
-    base_path = full_url.split('?')[0]
-    
-    website_url = f"{base_path}?page=website"
-    lms_url = f"{base_path}?page=lms"
+    st.title("🛠️ Admin Panel")
+    st.markdown("## 🔗 Portal Links")
+    base_url = st.experimental_get_url().split("?")[0]
+    st.markdown(f"- 🌐 Website: [{base_url}?page=website]({base_url}?page=website)")
+    st.markdown(f"- 🎓 LMS: [{base_url}?page=lms]({base_url}?page=lms)")
+    st.markdown(f"- 🔐 Admin Panel: [{base_url}]({base_url})")
 
-    st.markdown(f"🔵 **Customer Website**: [Open Website]({website_url})")
-    st.code(website_url, language="url")
-    
-    st.markdown(f"🟢 **LMS Portal**: [Open LMS]({lms_url})")
-    st.code(lms_url, language="url")
-
-    st.markdown("### ➕ Add New Course")
+    st.markdown("## ➕ Add New Course")
     title = st.text_input("Course Title")
     level = st.selectbox("Level", ["Beginner", "Intermediate", "Advanced"])
     if st.button("Add Course"):
-        courses.append({"title": title, "level": level})
-        st.success("Course added!")
+        db.collection("courses").document(title).set({
+            "title": title,
+            "level": level
+        })
+        st.success("Course added.")
 
-    st.markdown("### 📋 Current Courses")
+    st.markdown("## 📋 Existing Courses")
+    courses = db.collection("courses").stream()
     for course in courses:
-        st.markdown(f"- **{course['title']}** ({course['level']})")
+        data = course.to_dict()
+        st.markdown(f"- **{data['title']}** ({data['level']})")
 
-# --------- Routing ---------
+# ----------------------------
+# Page Routing
+# ----------------------------
 query_params = st.experimental_get_query_params()
-default_page = query_params.get("page", ["main"])[0]
+page = query_params.get("page", ["admin"])[0]
 
-if default_page == "website":
-    website_home()
-elif default_page == "lms":
-    st.sidebar.title("LMS Portal")
-    lms_section = st.sidebar.radio("LMS Pages", ["Login", "Register", "Dashboard", "Course Catalog"])
-    if lms_section == "Login":
-        lms_login()
-    elif lms_section == "Register":
-        lms_register()
-    elif lms_section == "Dashboard":
-        if st.session_state.user and st.session_state.role == "student":
+if page == "website":
+    section = st.sidebar.radio("Website Pages", ["Home", "About", "Contact"])
+    if section == "Home":
+        website_home()
+    elif section == "About":
+        website_about()
+    elif section == "Contact":
+        website_contact()
+
+elif page == "lms":
+    if not st.session_state.user or st.session_state.role != "student":
+        login_or_register = st.sidebar.radio("Choose", ["Login", "Register"])
+        if login_or_register == "Login":
+            login()
+        else:
+            register()
+    else:
+        section = st.sidebar.radio("LMS", ["Dashboard", "Course Catalog"])
+        if section == "Dashboard":
             lms_dashboard()
-        else:
-            st.warning("Login as a student to access dashboard.")
-    elif lms_section == "Course Catalog":
-        if st.session_state.user and st.session_state.role == "student":
+        elif section == "Course Catalog":
             lms_catalog()
-        else:
-            st.warning("Login to enroll.")
-else:
-    # Main Admin Portal View
-    st.sidebar.title("🔍 Portal Selector")
-    portal = st.sidebar.radio("Choose Portal", ["Website", "LMS Portal", "Admin Panel"])
 
-    if portal == "Website":
-        section = st.sidebar.radio("Website Pages", ["Home", "About", "Contact"])
-        if section == "Home":
-            website_home()
-        elif section == "About":
-            website_about()
-        elif section == "Contact":
-            website_contact()
-
-    elif portal == "LMS Portal":
-        lms_section = st.sidebar.radio("LMS Pages", ["Login", "Register", "Dashboard", "Course Catalog"])
-        if lms_section == "Login":
-            lms_login()
-        elif lms_section == "Register":
-            lms_register()
-        elif lms_section == "Dashboard":
-            if st.session_state.user and st.session_state.role == "student":
-                lms_dashboard()
-            else:
-                st.warning("Login as a student to access dashboard.")
-        elif lms_section == "Course Catalog":
-            if st.session_state.user and st.session_state.role == "student":
-                lms_catalog()
-            else:
-                st.warning("Login to enroll.")
-
-    elif portal == "Admin Panel":
-        if st.session_state.user != "admin":
-            admin_login()
-        else:
-            admin_dashboard()
+else:  # Admin Panel
+    if not st.session_state.user or st.session_state.role != "admin":
+        login()
+    else:
+        admin_dashboard()
