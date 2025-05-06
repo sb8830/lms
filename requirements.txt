@@ -4,3 +4,5 @@ pyrebase4
 google-auth
 google-cloud-firestore
 firebase-admin
+streamlit-authenticator
+pyyaml
