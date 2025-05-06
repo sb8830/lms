@@ -1,7 +1,8 @@
 import streamlit as st
+from urllib.parse import urlencode
 
 # --------- Simulated Storage ---------
-users = {}  # username -> password
+users = {}
 courses = [
     {"title": "Basics of Stock Market", "level": "Beginner"},
     {"title": "Technical Analysis", "level": "Intermediate"},
@@ -30,7 +31,7 @@ def website_home():
 
 def website_about():
     st.subheader("About Us")
-    st.write("FinEdu is an edtech platform focused on financial literacy and market education in India and beyond.")
+    st.write("FinEdu is an edtech platform focused on financial literacy and market education.")
 
 def website_contact():
     st.subheader("Contact")
@@ -96,50 +97,88 @@ def admin_login():
 
 def admin_dashboard():
     st.subheader("🛠️ Admin Dashboard")
-    st.markdown("### Add New Course")
+    
+    st.markdown("### 🔗 Direct Access Links")
+    base_url = st.experimental_get_query_params()
+    full_url = st.experimental_get_url()
+    base_path = full_url.split('?')[0]
+    
+    website_url = f"{base_path}?page=website"
+    lms_url = f"{base_path}?page=lms"
+
+    st.markdown(f"🔵 **Customer Website**: [Open Website]({website_url})")
+    st.code(website_url, language="url")
+    
+    st.markdown(f"🟢 **LMS Portal**: [Open LMS]({lms_url})")
+    st.code(lms_url, language="url")
+
+    st.markdown("### ➕ Add New Course")
     title = st.text_input("Course Title")
     level = st.selectbox("Level", ["Beginner", "Intermediate", "Advanced"])
     if st.button("Add Course"):
         courses.append({"title": title, "level": level})
-        st.success("Course added successfully!")
+        st.success("Course added!")
 
-    st.markdown("### Current Courses")
+    st.markdown("### 📋 Current Courses")
     for course in courses:
         st.markdown(f"- **{course['title']}** ({course['level']})")
 
-# --------- Navigation Sidebar ---------
-st.sidebar.title("🔍 Portal Selection")
-portal = st.sidebar.radio("Choose your view", ["Website", "LMS Portal", "Admin Panel"])
+# --------- Routing ---------
+query_params = st.experimental_get_query_params()
+default_page = query_params.get("page", ["main"])[0]
 
-# --------- Render Based on Portal ---------
-if portal == "Website":
-    section = st.sidebar.radio("Pages", ["Home", "About", "Contact"])
-    if section == "Home":
-        website_home()
-    elif section == "About":
-        website_about()
-    elif section == "Contact":
-        website_contact()
-
-elif portal == "LMS Portal":
-    section = st.sidebar.radio("LMS Pages", ["Login", "Register", "Dashboard", "Course Catalog"])
-    if section == "Login":
+if default_page == "website":
+    website_home()
+elif default_page == "lms":
+    st.sidebar.title("LMS Portal")
+    lms_section = st.sidebar.radio("LMS Pages", ["Login", "Register", "Dashboard", "Course Catalog"])
+    if lms_section == "Login":
         lms_login()
-    elif section == "Register":
+    elif lms_section == "Register":
         lms_register()
-    elif section == "Dashboard":
+    elif lms_section == "Dashboard":
         if st.session_state.user and st.session_state.role == "student":
             lms_dashboard()
         else:
-            st.warning("Login as a student to access the dashboard.")
-    elif section == "Course Catalog":
+            st.warning("Login as a student to access dashboard.")
+    elif lms_section == "Course Catalog":
         if st.session_state.user and st.session_state.role == "student":
             lms_catalog()
         else:
-            st.warning("Please login to enroll in courses.")
+            st.warning("Login to enroll.")
+else:
+    # Main Admin Portal View
+    st.sidebar.title("🔍 Portal Selector")
+    portal = st.sidebar.radio("Choose Portal", ["Website", "LMS Portal", "Admin Panel"])
 
-elif portal == "Admin Panel":
-    if st.session_state.user != "admin":
-        admin_login()
-    else:
-        admin_dashboard()
+    if portal == "Website":
+        section = st.sidebar.radio("Website Pages", ["Home", "About", "Contact"])
+        if section == "Home":
+            website_home()
+        elif section == "About":
+            website_about()
+        elif section == "Contact":
+            website_contact()
+
+    elif portal == "LMS Portal":
+        lms_section = st.sidebar.radio("LMS Pages", ["Login", "Register", "Dashboard", "Course Catalog"])
+        if lms_section == "Login":
+            lms_login()
+        elif lms_section == "Register":
+            lms_register()
+        elif lms_section == "Dashboard":
+            if st.session_state.user and st.session_state.role == "student":
+                lms_dashboard()
+            else:
+                st.warning("Login as a student to access dashboard.")
+        elif lms_section == "Course Catalog":
+            if st.session_state.user and st.session_state.role == "student":
+                lms_catalog()
+            else:
+                st.warning("Login to enroll.")
+
+    elif portal == "Admin Panel":
+        if st.session_state.user != "admin":
+            admin_login()
+        else:
+            admin_dashboard()
