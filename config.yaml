@@ -1,18 +1,26 @@
 credentials:
   usernames:
-    jsmith:
-      email: jsmith@example.com
-      name: John Smith
-      password: #####
-    rbriggs:
-      email: rbriggs@example.com
-      name: Rebecca Briggs
-      password: #####
+    admin_user:
+      email: admin@example.com
+      name: Admin User
+      password: $2b$12$KIXQJg1e1Yz1F6Yz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6
+      role: admin
+    backend_user:
+      email: backend@example.com
+      name: Backend User
+      password: $2b$12$KIXQJg1e1Yz1F6Yz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6
+      role: backend
+    customer_user:
+      email: customer@example.com
+      name: Customer User
+      password: $2b$12$KIXQJg1e1Yz1F6Yz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6YeOeYz1F6
+      role: customer
 cookie:
   expiry_days: 30
   key: some_signature_key
   name: some_cookie_name
 preauthorized:
   emails:
-    - jsmith@example.com
-    - rbriggs@example.com
+    - admin@example.com
+    - backend@example.com
+    - customer@example.com
