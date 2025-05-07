@@ -2,19 +2,17 @@ import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
-import os
 
 # Load configuration from YAML file
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
-# Create an authentication object
+# Create an authentication object without the deprecated 'preauthorized' parameter
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
     config['cookie']['key'],
-    config['cookie']['expiry_days'],
-    config['preauthorized']
+    config['cookie']['expiry_days']
 )
 
 # Render the login widget
