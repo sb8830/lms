@@ -1,53 +1,67 @@
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, auth, firestore
-import json
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 import os
 
-# Initialize Firebase Admin SDK
-if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_config.json")
-    firebase_admin.initialize_app(cred)
+# Load configuration from YAML file
+with open('config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
 
-db = firestore.client()
+# Create an authentication object
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days'],
+    config['preauthorized']
+)
 
-# User Authentication
-def login():
-    st.subheader("Login")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        try:
-            user = auth.get_user_by_email(email)
-            st.session_state['user'] = user.uid
-            st.success("Logged in successfully!")
-        except:
-            st.error("Invalid credentials")
+# Render the login widget
+name, authentication_status, username = authenticator.login('Login', 'main')
 
-def logout():
-    st.session_state.pop('user', None)
-    st.success("Logged out successfully!")
+# Handle authentication status
+if authentication_status:
+    authenticator.logout('Logout', 'main')
+    st.sidebar.write(f'Welcome *{name}*')
 
-# Main Application
-def main():
-    st.title("FinEdu LMS")
+    # Retrieve user role
+    user_role = config['credentials']['usernames'][username]['role']
 
-    # Navigation
-    page = st.sidebar.selectbox("Navigate", ["Website", "LMS Portal", "Admin Panel"])
-
-    if 'user' not in st.session_state:
-        login()
+    # Define available modes based on role
+    if user_role == 'admin':
+        mode = st.sidebar.selectbox('Select Mode', ['Admin Control', 'Backend LMS', 'Customer Site'])
+    elif user_role == 'backend':
+        mode = 'Backend LMS'
+    elif user_role == 'customer':
+        mode = 'Customer Site'
     else:
-        st.sidebar.button("Logout", on_click=logout)
-        if page == "Website":
-            st.subheader("Welcome to FinEdu!")
-            st.write("This is the public website.")
-        elif page == "LMS Portal":
-            st.subheader("LMS Portal")
-            st.write("Access your courses here.")
-        elif page == "Admin Panel":
-            st.subheader("Admin Panel")
-            st.write("Manage the platform here.")
+        st.error('Invalid role assigned.')
+        st.stop()
 
-if __name__ == "__main__":
-    main()
+    # Navigate to the selected mode
+    if mode == 'Admin Control':
+        st.experimental_set_query_params(page='admin_control')
+    elif mode == 'Backend LMS':
+        st.experimental_set_query_params(page='backend_lms')
+    elif mode == 'Customer Site':
+        st.experimental_set_query_params(page='customer_site')
+
+    # Load the corresponding page
+    page = st.experimental_get_query_params().get('page', [''])[0]
+    if page == 'admin_control':
+        import pages.admin_control as admin_control
+        admin_control.run()
+    elif page == 'backend_lms':
+        import pages.backend_lms as backend_lms
+        backend_lms.run()
+    elif page == 'customer_site':
+        import pages.customer_site as customer_site
+        customer_site.run()
+    else:
+        st.write("Please select a mode from the sidebar.")
+
+elif authentication_status is False:
+    st.error('Username/password is incorrect')
+elif authentication_status is None:
+    st.warning('Please enter your username and password')
