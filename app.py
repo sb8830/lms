@@ -7,7 +7,7 @@ from yaml.loader import SafeLoader
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
-# Create an authentication object without the deprecated 'preauthorized' parameter
+# Create an authentication object
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
@@ -18,48 +18,21 @@ authenticator = stauth.Authenticate(
 # Render the login widget
 name, authentication_status, username = authenticator.login('Login', 'main')
 
-# Handle authentication status
-if authentication_status:
-    authenticator.logout('Logout', 'main')
-    st.sidebar.write(f'Welcome *{name}*')
-
-    # Retrieve user role
-    user_role = config['credentials']['usernames'][username]['role']
-
-    # Define available modes based on role
-    if user_role == 'admin':
-        mode = st.sidebar.selectbox('Select Mode', ['Admin Control', 'Backend LMS', 'Customer Site'])
-    elif user_role == 'backend':
-        mode = 'Backend LMS'
-    elif user_role == 'customer':
-        mode = 'Customer Site'
-    else:
-        st.error('Invalid role assigned.')
-        st.stop()
-
-    # Navigate to the selected mode
-    if mode == 'Admin Control':
-        st.experimental_set_query_params(page='admin_control')
-    elif mode == 'Backend LMS':
-        st.experimental_set_query_params(page='backend_lms')
-    elif mode == 'Customer Site':
-        st.experimental_set_query_params(page='customer_site')
-
-    # Load the corresponding page
-    page = st.experimental_get_query_params().get('page', [''])[0]
-    if page == 'admin_control':
-        import pages.admin_control as admin_control
-        admin_control.run()
-    elif page == 'backend_lms':
-        import pages.backend_lms as backend_lms
-        backend_lms.run()
-    elif page == 'customer_site':
-        import pages.customer_site as customer_site
-        customer_site.run()
-    else:
-        st.write("Please select a mode from the sidebar.")
-
-elif authentication_status is False:
-    st.error('Username/password is incorrect')
-elif authentication_status is None:
-    st.warning('Please enter your username and password')
+# Registration section
+if authentication_status is None:
+    try:
+        email, username, name = authenticator.register_user(pre_authorized=config['preauthorized']['emails'])
+        if email:
+            st.success('User registered successfully')
+            # Update the config.yaml file to remove the registered email from preauthorized list
+            config['credentials']['usernames'][username] = {
+                'email': email,
+                'name': name,
+                'password': '',  # The password will be hashed and added automatically
+                'role': 'customer'  # Assign a default role or modify as needed
+            }
+            config['preauthorized']['emails'].remove(email)
+            with open('config.yaml', 'w') as file:
+                yaml.dump(config, file, default_flow_style=False)
+    except Exception as e:
+        st.error(e)
